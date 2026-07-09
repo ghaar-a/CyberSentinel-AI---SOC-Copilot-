@@ -1,3 +1,4 @@
+# Concentra toda comunicação com a API do Google Gemini.
 from google import genai
 from google.genai import types
 
@@ -5,12 +6,17 @@ from src.config.settings import (
     GEMINI_API_KEY,
     GEMINI_MODEL,
     TEMPERATURE,
-    MAX_OUTPUT_TOKENS,
+    MAX_OUTPUT_TOKENS
 )
+
+from src.utils.logger import logger
 
 
 class GeminiClient:
-
+    """
+    Cliente responsável pela comunicação
+    com a API do Google Gemini.
+    """
 
     def __init__(self):
 
@@ -19,31 +25,32 @@ class GeminiClient:
                 "GEMINI_API_KEY não configurada."
             )
 
-
         self.client = genai.Client(
             api_key=GEMINI_API_KEY
         )
-
-
 
     def generate(
         self,
         prompt: str
     ) -> str:
 
+        logger.info(
+            "Enviando prompt ao Gemini..."
+        )
 
         response = (
             self.client.models.generate_content(
                 model=GEMINI_MODEL,
-
                 contents=prompt,
-
                 config=types.GenerateContentConfig(
                     temperature=TEMPERATURE,
-                    max_output_tokens=MAX_OUTPUT_TOKENS,
-                ),
+                    max_output_tokens=MAX_OUTPUT_TOKENS
+                )
             )
         )
 
+        logger.info(
+            "Resposta recebida do Gemini."
+        )
 
         return response.text

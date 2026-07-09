@@ -1,64 +1,68 @@
+# Orquestra a Prompt Engine e fornece uma interface única para o restante da aplicação.
 from pathlib import Path
+from typing import List
+
+from src.knowledge.knowledge_document import KnowledgeDocument
+
+from src.prompts.context_formatter import ContextFormatter
+from src.prompts.prompt_builder import PromptBuilder
+from src.prompts.prompt_loader import PromptLoader
 
 
 class PromptManager:
+    """
+    Fachada da Prompt Engine.
 
+    Responsável por fornecer
+    um único ponto de acesso
+    para construção de prompts.
+    """
 
     def __init__(
         self,
-        prompts_path: Path
+        prompts_directory: Path
     ):
 
-        self.prompts_path = prompts_path
-
-
-
-    def load_prompt(
-        self,
-        filename: str
-    ):
-
-        file = (
-            self.prompts_path /
-            filename
+        self.loader = PromptLoader(
+            prompts_directory
         )
 
-        return file.read_text(
-            encoding="utf-8"
-        )
+        self.formatter = ContextFormatter()
 
-
+        self.builder = PromptBuilder()
 
     def build_prompt(
         self,
-        question: str,
-        knowledge: str
-    ):
+        user_question: str,
+        documents: List[KnowledgeDocument]
+    ) -> str:
 
-
-        system = self.load_prompt(
+        system_prompt = self.loader.load(
             "system_prompt.md"
         )
 
-
-        guardrails = self.load_prompt(
+        guardrails = self.loader.load(
             "guardrails.md"
         )
 
+        response_template = self.loader.load(
+            "response_template.md"
+        )
 
-        return f"""
-{system}
+        knowledge_context = (
+            self.formatter.format(
+                documents
+            )
+        )
 
+        return self.builder.build(
+            system_prompt=system_prompt,
+            guardrails=guardrails,
+            knowledge_context=knowledge_context,
+            response_template=response_template,
+            user_question=user_question
+        )
 
-{guardrails}
+    def clear_cache(self):
 
-
-Knowledge Context:
-
-{knowledge}
-
-
-User Question:
-
-{question}
-"""
+        self.loader.clear_cache()

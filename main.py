@@ -17,7 +17,7 @@ def create_agent() -> CyberSentinelAgent:
     knowledge_loader.load()
 
     prompt_manager = PromptManager(
-        prompts_path=PROMPTS_DIR
+        prompts_directory=PROMPTS_DIR
     )
 
     gemini_client = GeminiClient()

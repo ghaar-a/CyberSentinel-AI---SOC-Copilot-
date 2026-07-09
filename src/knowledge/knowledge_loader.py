@@ -1,3 +1,4 @@
+# Responsável pela base de conhecimento
 from pathlib import Path
 from typing import List
 
@@ -7,90 +8,91 @@ from src.utils.logger import logger
 
 
 class KnowledgeLoader:
+    """
+    Responsável por carregar e consultar a Base de Conhecimento.
+    """
 
-    def __init__(
-        self,
-        directory: Path = KNOWLEDGE_DIR
-    ):
-        self.directory = directory
-        self.documents: List[
-            KnowledgeDocument
-        ] = []
+    def __init__(self, knowledge_directory: Path = KNOWLEDGE_DIR):
+        self.knowledge_directory = knowledge_directory
+        self._documents: List[KnowledgeDocument] = []
 
+    @property
+    def documents(self) -> List[KnowledgeDocument]:
+        """
+        Retorna uma cópia da coleção de documentos carregados.
+        """
+        return list(self._documents)
 
-    def load(self):
-        self.documents.clear()
+    def load(self) -> None:
+        """
+        Carrega todos os arquivos Markdown da Base de Conhecimento.
+        """
 
-        files = self.directory.rglob(
-            "*.md"
+        self._documents.clear()
+
+        if not self.knowledge_directory.exists():
+            raise FileNotFoundError(
+                f"Diretório não encontrado: {self.knowledge_directory}"
+            )
+
+        markdown_files = sorted(
+            self.knowledge_directory.rglob("*.md")
         )
-
-        for file in files:
-            document = self._load_file(
-                file
-            )
-            self.documents.append(
-                document
-            )
 
         logger.info(
-            "%s documentos carregados.",
-            len(self.documents)
+            "Carregando %s documentos...",
+            len(markdown_files)
         )
 
+        for file_path in markdown_files:
+            document = self._load_document(file_path)
+            self._documents.append(document)
 
-    def _load_file(
-        self,
-        file: Path
-    ) -> KnowledgeDocument:
-        content = file.read_text(
-            encoding="utf-8"
+        logger.info(
+            "Base de Conhecimento carregada com sucesso."
         )
-
-        return KnowledgeDocument(
-            name=file.stem,
-            category=file.parent.name,
-            path=file,
-            content=content
-        )
-
-
-    def get_documents(self):
-        return self.documents
-
 
     def search(
         self,
         query: str,
         limit: int = 5
-    ):
-        query_terms = (
-            query.lower()
-            .split()
-        )
+    ) -> List[KnowledgeDocument]:
+        """
+        Busca simples baseada em palavras-chave.
 
-        scores = []
+        Esta implementação será substituída futuramente
+        por um mecanismo RAG utilizando embeddings.
+        """
 
-        for document in self.documents:
-            content = (
-                document.content
-                .lower()
-            )
+        terms = {
+            term.lower()
+            for term in query.split()
+        }
+
+        ranking = []
+
+        for document in self._documents:
+
+            text = (
+                f"{document.name}\n"
+                f"{document.category}\n"
+                f"{document.content}"
+            ).lower()
 
             score = sum(
-                term in content
-                for term in query_terms
+                term in text
+                for term in terms
             )
 
             if score > 0:
-                scores.append(
+                ranking.append(
                     (
                         score,
                         document
                     )
                 )
 
-        scores.sort(
+        ranking.sort(
             key=lambda item: item[0],
             reverse=True
         )
@@ -98,5 +100,40 @@ class KnowledgeLoader:
         return [
             document
             for _, document
-            in scores[:limit]
+            in ranking[:limit]
         ]
+
+    def statistics(self) -> dict:
+
+        categories = {}
+
+        for document in self._documents:
+            categories.setdefault(
+                document.category,
+                0
+            )
+
+            categories[
+                document.category
+            ] += 1
+
+        return {
+            "documents": len(self._documents),
+            "categories": categories
+        }
+
+    def _load_document(
+        self,
+        file_path: Path
+    ) -> KnowledgeDocument:
+
+        content = file_path.read_text(
+            encoding="utf-8"
+        )
+
+        return KnowledgeDocument(
+            name=file_path.stem,
+            category=file_path.parent.name,
+            path=file_path,
+            content=content
+        )
