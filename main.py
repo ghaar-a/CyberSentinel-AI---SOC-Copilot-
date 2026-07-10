@@ -4,7 +4,12 @@ from src.knowledge.knowledge_loader import KnowledgeLoader
 from src.llm.gemini_client import GeminiClient
 from src.prompts.prompt_manager import PromptManager
 from src.utils.logger import logger
+from src.chunking import MarkdownChunker, chunker
 
+from src.retrieval import (
+    Retriever,
+    KeywordRetriever,
+)
 
 def create_agent() -> CyberSentinelAgent:
     """
@@ -16,6 +21,18 @@ def create_agent() -> CyberSentinelAgent:
 
     knowledge_loader.load()
 
+    retriever = Retriever(
+        strategy=KeywordRetriever(
+            repository=knowledge_loader
+    )
+)
+
+    chunker = MarkdownChunker(
+        repository=knowledge_loader
+    )
+
+    chunker.chunk()
+
     prompt_manager = PromptManager(
         prompts_directory=PROMPTS_DIR
     )
@@ -23,7 +40,7 @@ def create_agent() -> CyberSentinelAgent:
     gemini_client = GeminiClient()
 
     return CyberSentinelAgent(
-        knowledge_loader=knowledge_loader,
+        retriever=retriever,
         prompt_manager=prompt_manager,
         llm_client=gemini_client,
     )

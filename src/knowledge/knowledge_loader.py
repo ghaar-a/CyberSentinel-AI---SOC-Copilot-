@@ -1,39 +1,49 @@
-# Responsável pela base de conhecimento
 from pathlib import Path
-from typing import List
 
 from src.config.settings import KNOWLEDGE_DIR
-from src.interfaces.knowledge_provider import KnowledgeProvider
+from src.interfaces.document_repository import DocumentRepository
 from src.knowledge.knowledge_document import KnowledgeDocument
 from src.utils.logger import logger
 
 
-class KnowledgeLoader(KnowledgeProvider):
+class KnowledgeLoader(DocumentRepository):
     """
-    Responsável por carregar e consultar a Base de Conhecimento.
+    Responsável apenas por carregar documentos
+    da Base de Conhecimento.
+
+    Não possui qualquer lógica de recuperação.
     """
 
-    def __init__(self, knowledge_directory: Path = KNOWLEDGE_DIR):
+    def __init__(
+        self,
+        knowledge_directory: Path = KNOWLEDGE_DIR
+    ) -> None:
+
         self.knowledge_directory = knowledge_directory
-        self._documents: List[KnowledgeDocument] = []
+        self._documents: list[KnowledgeDocument] = []
 
     @property
-    def documents(self) -> List[KnowledgeDocument]:
-        """
-        Retorna uma cópia da coleção de documentos carregados.
-        """
+    def documents(
+        self,
+    ) -> list[KnowledgeDocument]:
+
         return list(self._documents)
 
-    def load(self) -> None:
-        """
-        Carrega todos os arquivos Markdown da Base de Conhecimento.
-        """
+    def get_all(
+        self,
+    ) -> list[KnowledgeDocument]:
+
+        return self.documents
+
+    def load(
+        self,
+    ) -> None:
 
         self._documents.clear()
 
         if not self.knowledge_directory.exists():
             raise FileNotFoundError(
-                f"Diretório não encontrado: {self.knowledge_directory}"
+                f"Diretório inexistente: {self.knowledge_directory}"
             )
 
         markdown_files = sorted(
@@ -41,74 +51,32 @@ class KnowledgeLoader(KnowledgeProvider):
         )
 
         logger.info(
-            "Carregando %s documentos...",
+            "Carregando %d documentos...",
             len(markdown_files)
         )
 
         for file_path in markdown_files:
-            document = self._load_document(file_path)
-            self._documents.append(document)
 
-        logger.info(
-            "Base de Conhecimento carregada com sucesso."
-        )
-
-    def search(
-        self,
-        query: str,
-        limit: int = 5
-    ) -> List[KnowledgeDocument]:
-        """
-        Busca simples baseada em palavras-chave.
-
-        Esta implementação será substituída futuramente
-        por um mecanismo RAG utilizando embeddings.
-        """
-
-        terms = {
-            term.lower()
-            for term in query.split()
-        }
-
-        ranking = []
-
-        for document in self._documents:
-
-            text = (
-                f"{document.name}\n"
-                f"{document.category}\n"
-                f"{document.content}"
-            ).lower()
-
-            score = sum(
-                term in text
-                for term in terms
+            document = self._load_document(
+                file_path
             )
 
-            if score > 0:
-                ranking.append(
-                    (
-                        score,
-                        document
-                    )
-                )
+            self._documents.append(
+                document
+            )
 
-        ranking.sort(
-            key=lambda item: item[0],
-            reverse=True
+        logger.info(
+            "Base carregada com sucesso."
         )
 
-        return [
-            document
-            for _, document
-            in ranking[:limit]
-        ]
+    def statistics(
+        self,
+    ) -> dict:
 
-    def statistics(self) -> dict:
-
-        categories = {}
+        categories: dict[str, int] = {}
 
         for document in self._documents:
+
             categories.setdefault(
                 document.category,
                 0
@@ -119,8 +87,10 @@ class KnowledgeLoader(KnowledgeProvider):
             ] += 1
 
         return {
-            "documents": len(self._documents),
-            "categories": categories
+            "documents": len(
+                self._documents
+            ),
+            "categories": categories,
         }
 
     def _load_document(
@@ -128,13 +98,11 @@ class KnowledgeLoader(KnowledgeProvider):
         file_path: Path
     ) -> KnowledgeDocument:
 
-        content = file_path.read_text(
-            encoding="utf-8"
-        )
-
         return KnowledgeDocument(
             name=file_path.stem,
             category=file_path.parent.name,
             path=file_path,
-            content=content
+            content=file_path.read_text(
+                encoding="utf-8"
+            ),
         )

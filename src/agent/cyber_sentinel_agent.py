@@ -2,6 +2,7 @@ from src.interfaces.knowledge_provider import KnowledgeProvider
 from src.interfaces.llm_provider import LLMProvider
 from src.interfaces.prompt_provider import PromptProvider
 
+from src.retrieval.retriever import Retriever
 from src.utils.logger import logger
 
 
@@ -18,12 +19,12 @@ class CyberSentinelAgent:
 
     def __init__(
         self,
-        knowledge_provider: KnowledgeProvider,
+        retriever: Retriever,
         prompt_provider: PromptProvider,
         llm_provider: LLMProvider,
     ) -> None:
 
-        self.knowledge_provider = knowledge_provider
+        self.retriever = retriever
         self.prompt_provider = prompt_provider
         self.llm_provider = llm_provider
 
@@ -36,7 +37,7 @@ class CyberSentinelAgent:
             "Nova pergunta recebida."
         )
 
-        documents = self.knowledge_provider.search(
+        documents = self.retriever.retrieve(
             query=question
         )
 
