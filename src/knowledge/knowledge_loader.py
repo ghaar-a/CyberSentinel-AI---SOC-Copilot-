@@ -3,11 +3,12 @@ from pathlib import Path
 from typing import List
 
 from src.config.settings import KNOWLEDGE_DIR
+from src.interfaces.knowledge_provider import KnowledgeProvider
 from src.knowledge.knowledge_document import KnowledgeDocument
 from src.utils.logger import logger
 
 
-class KnowledgeLoader:
+class KnowledgeLoader(KnowledgeProvider):
     """
     Responsável por carregar e consultar a Base de Conhecimento.
     """

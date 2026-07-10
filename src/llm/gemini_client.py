@@ -2,17 +2,13 @@
 from google import genai
 from google.genai import types
 
-from src.config.settings import (
-    GEMINI_API_KEY,
-    GEMINI_MODEL,
-    TEMPERATURE,
-    MAX_OUTPUT_TOKENS
-)
+from src.config.settings import settings
 
+from src.interfaces.llm_provider import LLMProvider
 from src.utils.logger import logger
 
 
-class GeminiClient:
+class GeminiClient(LLMProvider):
     """
     Cliente responsável pela comunicação
     com a API do Google Gemini.
@@ -20,13 +16,13 @@ class GeminiClient:
 
     def __init__(self):
 
-        if not GEMINI_API_KEY:
+        if not settings.gemini_api_key:
             raise ValueError(
                 "GEMINI_API_KEY não configurada."
             )
 
         self.client = genai.Client(
-            api_key=GEMINI_API_KEY
+            api_key=settings.gemini_api_key
         )
 
     def generate(
@@ -40,11 +36,11 @@ class GeminiClient:
 
         response = (
             self.client.models.generate_content(
-                model=GEMINI_MODEL,
+                model=settings.gemini_model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=TEMPERATURE,
-                    max_output_tokens=MAX_OUTPUT_TOKENS
+                    temperature=settings.temperature,
+                    max_output_tokens=settings.max_output_tokens
                 )
             )
         )

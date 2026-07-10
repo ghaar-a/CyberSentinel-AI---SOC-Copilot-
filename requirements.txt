@@ -1,9 +1,9 @@
-google-genai>=0.1.1
+google-genai>=1.0.0
 
 python-dotenv>=1.0.1
 
 pydantic>=2.11.0
 
-markdown>=3.8
+pydantic-settings>=2.10.1
 
-typing-extensions>=4.14.0
+markdown>=3.8

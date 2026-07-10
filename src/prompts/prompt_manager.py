@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import List
 
+from src.interfaces.prompt_provider import PromptProvider
 from src.knowledge.knowledge_document import KnowledgeDocument
 
 from src.prompts.context_formatter import ContextFormatter
@@ -9,7 +10,7 @@ from src.prompts.prompt_builder import PromptBuilder
 from src.prompts.prompt_loader import PromptLoader
 
 
-class PromptManager:
+class PromptManager(PromptProvider):
     """
     Fachada da Prompt Engine.
 
