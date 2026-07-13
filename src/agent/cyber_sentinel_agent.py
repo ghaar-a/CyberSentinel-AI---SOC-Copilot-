@@ -1,8 +1,7 @@
-from src.interfaces.knowledge_provider import KnowledgeProvider
 from src.interfaces.llm_provider import LLMProvider
 from src.interfaces.prompt_provider import PromptProvider
-
 from src.retrieval.retriever import Retriever
+
 from src.utils.logger import logger
 
 
@@ -10,11 +9,9 @@ class CyberSentinelAgent:
     """
     Agente principal do CyberSentinel AI.
 
-    Responsável por coordenar o fluxo entre:
-
-    - Provedor de Conhecimento
-    - Gerenciador de Prompts
-    - Modelo de Linguagem
+    Responsável apenas por orquestrar
+    o fluxo entre recuperação,
+    construção do prompt e execução do LLM.
     """
 
     def __init__(
@@ -30,20 +27,20 @@ class CyberSentinelAgent:
 
     def ask(
         self,
-        question: str
+        question: str,
     ) -> str:
 
         logger.info(
-            "Nova pergunta recebida."
+            "Recebida nova pergunta."
         )
 
-        documents = self.retriever.retrieve(
+        retrieved_chunks = self.retriever.retrieve(
             query=question
         )
 
         prompt = self.prompt_provider.build_prompt(
             user_question=question,
-            documents=documents,
+            retrieved_chunks=retrieved_chunks,
         )
 
         response = self.llm_provider.generate(
@@ -51,7 +48,7 @@ class CyberSentinelAgent:
         )
 
         logger.info(
-            "Resposta entregue ao usuário."
+            "Resposta gerada."
         )
 
         return response

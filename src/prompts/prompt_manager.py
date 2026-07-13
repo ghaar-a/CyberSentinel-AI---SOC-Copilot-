@@ -1,9 +1,7 @@
-# Orquestra a Prompt Engine e fornece uma interface única para o restante da aplicação.
 from pathlib import Path
-from typing import List
 
+from src.retrieval.retrieved_chunk import RetrievedChunk
 from src.interfaces.prompt_provider import PromptProvider
-from src.knowledge.knowledge_document import KnowledgeDocument
 
 from src.prompts.context_formatter import ContextFormatter
 from src.prompts.prompt_builder import PromptBuilder
@@ -14,15 +12,14 @@ class PromptManager(PromptProvider):
     """
     Fachada da Prompt Engine.
 
-    Responsável por fornecer
-    um único ponto de acesso
-    para construção de prompts.
+    Responsável por coordenar
+    toda a construção do prompt.
     """
 
     def __init__(
         self,
-        prompts_directory: Path
-    ):
+        prompts_directory: Path,
+    ) -> None:
 
         self.loader = PromptLoader(
             prompts_directory
@@ -35,7 +32,7 @@ class PromptManager(PromptProvider):
     def build_prompt(
         self,
         user_question: str,
-        documents: List[KnowledgeDocument]
+        retrieved_chunks: list[RetrievedChunk],
     ) -> str:
 
         system_prompt = self.loader.load(
@@ -52,7 +49,7 @@ class PromptManager(PromptProvider):
 
         knowledge_context = (
             self.formatter.format(
-                documents
+                retrieved_chunks
             )
         )
 
@@ -61,9 +58,11 @@ class PromptManager(PromptProvider):
             guardrails=guardrails,
             knowledge_context=knowledge_context,
             response_template=response_template,
-            user_question=user_question
+            user_question=user_question,
         )
 
-    def clear_cache(self):
+    def clear_cache(
+        self,
+    ) -> None:
 
         self.loader.clear_cache()

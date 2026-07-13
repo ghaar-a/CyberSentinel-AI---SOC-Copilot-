@@ -1,30 +1,29 @@
 from __future__ import annotations
 
-from src.knowledge.knowledge_document import KnowledgeDocument
-
 from src.retrieval.retrieval_strategy import RetrievalStrategy
+from src.retrieval.retrieved_chunk import RetrievedChunk
 
 
 class Retriever:
     """
-    Fachada responsável por executar
-    a estratégia de recuperação.
+    Fachada responsável pela recuperação
+    de contexto.
     """
 
     def __init__(
         self,
-        strategy: RetrievalStrategy
+        strategy: RetrievalStrategy,
     ) -> None:
 
-        self.strategy = strategy
+        self._strategy = strategy
 
     def retrieve(
         self,
         query: str,
-        limit: int = 5
-    ) -> list[KnowledgeDocument]:
+        limit: int = 5,
+    ) -> list[RetrievedChunk]:
 
-        return self.strategy.retrieve(
+        return self._strategy.retrieve(
             query=query,
-            limit=limit
+            limit=limit,
         )

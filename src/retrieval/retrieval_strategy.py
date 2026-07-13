@@ -2,19 +2,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from src.knowledge.knowledge_document import KnowledgeDocument
+from src.retrieval.retrieved_chunk import RetrievedChunk
 
 
 class RetrievalStrategy(ABC):
     """
-    Define o contrato para qualquer estratégia
-    de recuperação de documentos.
+    Contrato para estratégias de recuperação.
     """
 
     @abstractmethod
     def retrieve(
         self,
         query: str,
-        limit: int = 5
-    ) -> list[KnowledgeDocument]:
+        limit: int = 5,
+    ) -> list[RetrievedChunk]:
         raise NotImplementedError

@@ -1,36 +1,45 @@
-# Formata o contexto recuperado da Base de Conhecimento.
-from typing import List
+from __future__ import annotations
 
-from src.knowledge.knowledge_document import KnowledgeDocument
+from src.retrieval.retrieved_chunk import RetrievedChunk
 
 
 class ContextFormatter:
     """
-    Responsável por transformar documentos
-    em contexto textual para o LLM.
+    Formata os chunks recuperados
+    para construção do prompt.
     """
 
     def format(
         self,
-        documents: List[KnowledgeDocument]
+        retrieved_chunks: list[RetrievedChunk],
     ) -> str:
 
-        if not documents:
+        if not retrieved_chunks:
+
             return (
-                "Nenhum documento relevante foi encontrado."
+                "Nenhum contexto relevante encontrado."
             )
 
         sections = []
 
-        for document in documents:
+        for item in retrieved_chunks:
 
-            section = (
-                f"# Documento\n"
-                f"Nome: {document.name}\n"
-                f"Categoria: {document.category}\n\n"
-                f"{document.content}"
+            chunk = item.chunk
+
+            sections.append(
+                f"""
+Documento: {chunk.document_name}
+
+Categoria: {chunk.category}
+
+Relevância: {item.score:.2f}
+
+Trecho:
+
+{chunk.content}
+""".strip()
             )
 
-            sections.append(section)
-
-        return "\n\n---\n\n".join(sections)
+        return "\n\n----------------------\n\n".join(
+            sections
+        )
