@@ -1,60 +1,51 @@
-from src.agent.cyber_sentinel_agent import CyberSentinelAgent
-from src.config.settings import PROMPTS_DIR
-from src.knowledge.knowledge_loader import KnowledgeLoader
-from src.llm.gemini_client import GeminiClient
-from src.prompts.prompt_manager import PromptManager
-from src.utils.logger import logger
-
-
+from src.agent import CyberSentinelAgent
 from src.chunking import MarkdownChunker
+from src.config.settings import PROMPTS_DIR
+from src.knowledge import KnowledgeLoader
+from src.llm import GeminiClient
+from src.prompts import PromptManager
+from src.retrieval import KeywordChunkRetriever, Retriever
+from src.utils import logger
 
-from src.retrieval import Retriever
-from src.retrieval.keyword_chunk_retriever import (
-    KeywordChunkRetriever,
-)
 
 def create_agent() -> CyberSentinelAgent:
     """
-    Inicializa todos os componentes
-    necessários para o CyberSentinel AI.
+    Inicializa todos os componentes necessários
+    para execução do CyberSentinel AI.
     """
 
     knowledge_loader = KnowledgeLoader()
-
     knowledge_loader.load()
 
     chunker = MarkdownChunker(
-        repository=knowledge_loader
+        repository=knowledge_loader,
     )
 
     chunker.chunk()
 
     retriever = Retriever(
         strategy=KeywordChunkRetriever(
-            provider=chunker
+            provider=chunker,
+        )
     )
-)
-
-    chunker = MarkdownChunker(
-        repository=knowledge_loader
-    )
-
-    chunker.chunk()
 
     prompt_manager = PromptManager(
-        prompts_directory=PROMPTS_DIR
+        prompts_directory=PROMPTS_DIR,
     )
 
     gemini_client = GeminiClient()
 
     return CyberSentinelAgent(
         retriever=retriever,
-        prompt_manager=prompt_manager,
-        llm_client=gemini_client,
+        prompt_provider=prompt_manager,
+        llm_provider=gemini_client,
     )
 
 
-def main():
+def main() -> None:
+    """
+    Ponto de entrada da aplicação.
+    """
 
     logger.info(
         "Inicializando CyberSentinel AI..."
@@ -70,30 +61,27 @@ def main():
 
         question = input(
             "\nCyberSentinel > "
-        )
+        ).strip()
 
-        if question.lower() in [
+        if question.lower() in {
             "exit",
             "quit",
-            "sair"
-        ]:
+            "sair",
+        }:
             logger.info(
                 "Encerrando aplicação."
             )
             break
 
+        if not question:
+            continue
 
         response = agent.ask(
-            question
+            question,
         )
 
-
-        print(
-            "\nResposta:\n"
-        )
-
+        print("\nResposta:\n")
         print(response)
-
 
 
 if __name__ == "__main__":

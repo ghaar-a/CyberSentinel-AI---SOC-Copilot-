@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import List
 
 from src.vectorstore.vector_document import VectorDocument
 from src.vectorstore.vector_search_result import VectorSearchResult
@@ -7,87 +8,94 @@ from src.vectorstore.vector_search_result import VectorSearchResult
 
 class VectorStore(ABC):
     """
-    Contrato para implementações de armazenamento de vetores.
+    Contrato responsável pelo armazenamento e recuperação
+    de documentos vetoriais.
 
-    Esta interface isola a aplicação de tecnologias concretas
-    de banco de dados vetorial.
+    Esta abstração desacopla a aplicação de implementações
+    específicas como FAISS, ChromaDB, pgvector ou qualquer
+    outro banco vetorial.
 
-    As implementações podem utilizar:
-        - FAISS
-        - ChromaDB
-        - PostgreSQL + pgvector
-        - Milvus
-        - Qdrant
-        - Armazenamento em memória (In-memory)
+    O restante da aplicação deve depender apenas desta
+    interface, respeitando o princípio da Inversão de
+    Dependência (Dependency Inversion Principle).
     """
 
     @abstractmethod
     def add(
         self,
-        document: VectorDocument
+        document: VectorDocument,
     ) -> None:
         """
-        Armazena um documento vetorial.
+        Adiciona um documento vetorial ao índice.
+
+        Caso já exista um documento com o mesmo identificador,
+        a implementação poderá atualizá-lo.
 
         Args:
             document:
-                Documento contendo metadados de conteúdo
-                e o vetor de embedding.
+                Documento vetorial que será indexado.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def add_many(
         self,
-        documents: List[VectorDocument]
+        documents: list[VectorDocument],
     ) -> None:
         """
-        Armazena múltiplos documentos vetoriais.
+        Adiciona múltiplos documentos vetoriais.
 
         Args:
             documents:
-                Coleção de documentos vetoriais.
+                Lista de documentos vetoriais.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def search(
         self,
-        query_vector: List[float],
-        top_k: int = 5
-    ) -> List[VectorSearchResult]:
+        query_vector: list[float],
+        limit: int = 5,
+    ) -> list[VectorSearchResult]:
         """
-        Realiza busca por similaridade.
+        Executa uma busca por similaridade.
 
         Args:
             query_vector:
-                Representação vetorial da consulta.
+                Vetor da consulta.
 
-            top_k:
-                Número de resultados retornados.
+            limit:
+                Quantidade máxima de resultados.
 
         Returns:
-            Resultados ranqueados da busca vetorial.
+            Lista contendo os documentos mais similares.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def delete(
         self,
-        document_id: str
+        document_id: str,
     ) -> None:
         """
-        Remove um documento do armazenamento.
+        Remove um documento do índice.
 
         Args:
             document_id:
-                Identificador do documento armazenado.
+                Identificador do documento.
         """
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def clear(self) -> None:
         """
-        Remove todos os vetores armazenados.
+        Remove todos os documentos armazenados.
         """
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def size(self) -> int:
+        """
+        Retorna a quantidade de documentos indexados.
+        """
+        raise NotImplementedError

@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from src.chunking.chunk import Chunk
+from typing import Dict
 
 
 @dataclass(slots=True)
 class Embedding:
     """
-    Representa um embedding associado
-    a um Chunk.
+    Representa a representação vetorial
+    gerada a partir de um conteúdo.
 
-    Esta entidade será utilizada pelos
-    bancos vetoriais.
+    Um embedding é uma estrutura matemática
+    utilizada para busca semântica.
+
+    Ele não conhece a origem do conteúdo,
+    apenas mantém o vetor e seus metadados.
     """
 
-    chunk: Chunk
+    id: str
 
     vector: list[float]
+
+    metadata: Dict[str, str]
