@@ -9,20 +9,28 @@ from src.interfaces.embedding_provider import EmbeddingProvider
 
 class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
     """
-    Implementação responsável pela geração de embeddings utilizando
-    a biblioteca Sentence Transformers.
+    Implementação concreta responsável pela geração de embeddings
+    utilizando Sentence Transformers.
 
-    Esta implementação será utilizada por qualquer banco vetorial
-    suportado pela aplicação (FAISS, ChromaDB, pgvector etc.).
+    Esta classe é utilizada durante a etapa de indexação da base
+    de conhecimento e permanece desacoplada da camada de Retrieval.
 
-    A classe permanece desacoplada da camada de recuperação,
-    sendo utilizada apenas durante o processo de indexação.
+    O modelo pode ser alterado futuramente sem impactar o restante
+    da aplicação.
     """
 
     def __init__(
         self,
         model_name: str = "all-MiniLM-L6-v2",
     ) -> None:
+        """
+        Inicializa o modelo de embeddings.
+
+        Args:
+            model_name:
+                Nome do modelo Sentence Transformers.
+        """
+
         self._model = SentenceTransformer(model_name)
 
     def generate(
@@ -37,7 +45,7 @@ class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
                 Chunks que serão vetorizados.
 
         Returns:
-            Lista de embeddings correspondentes.
+            Lista de Embeddings.
         """
 
         if not chunks:
@@ -47,6 +55,7 @@ class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
             [chunk.content for chunk in chunks],
             convert_to_numpy=True,
             normalize_embeddings=True,
+            show_progress_bar=True,
         )
 
         embeddings: list[Embedding] = []
