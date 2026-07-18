@@ -1,0 +1,24 @@
+{
+  "name": "CyberSentinel-AI Dev Environment",
+  
+  // Define que a nuvem deve usar a imagem oficial do Python na versão estável 3.10
+  "image": "mcr.microsoft.com/devcontainers/python:3.10",
+
+  "customizations": {
+    "vscode": {
+      // Força o VS Code a instalar as extensões corretas na nuvem
+      // Isso resolve permanentemente aquele aviso amarelo do Pylance!
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ],
+      "settings": {
+        "python.analysis.typeCheckingMode": "basic"
+      }
+    }
+  },
+
+  // O comando mais importante: diz para o contêiner instalar todas as suas 
+  // bibliotecas de IA (sentence-transformers, chromadb, torch) assim que ligar
+  "postCreateCommand": "pip install --upgrade pip && pip install -r requirements.txt"
+}
