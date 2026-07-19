@@ -1,17 +1,8 @@
 """
-Pacote responsável pela geração de embeddings.
+Componentes relacionados à geração de embeddings.
 
-Esta camada abstrai completamente a tecnologia utilizada
-para transformar texto em vetores.
-
-Implementações futuras poderão utilizar:
-
-- Sentence Transformers
-- Google Gemini Embeddings
-- OpenAI Embeddings
-- Cohere Embeddings
-
-sem alterar o restante da aplicação.
+Este pacote contém as entidades e componentes responsáveis
+pela transformação de conteúdo textual em representações vetoriais.
 """
 
 from .embedding import Embedding

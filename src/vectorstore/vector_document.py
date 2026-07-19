@@ -1,40 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+
+from src.chunking.chunk import Chunk
 
 
-@dataclass(slots=True, frozen=True)
+@dataclass(frozen=True, slots=True)
 class VectorDocument:
     """
-    Representa um documento preparado para indexação vetorial.
+    Representa um documento vetorial indexável.
 
-    Esta entidade é independente da origem do conteúdo.
+    Um VectorDocument associa um Chunk ao seu vetor
+    de embedding correspondente.
 
-    Um VectorDocument representa exatamente aquilo que será
-    armazenado em um banco vetorial.
+    O Chunk mantém o conteúdo original e os metadados
+    necessários para reconstrução do contexto.
 
-    Diferentemente de Chunk, esta entidade não possui
-    responsabilidades relacionadas ao processo de divisão
-    de documentos.
-
-    Ela representa apenas:
-
-    - conteúdo textual;
-    - vetor correspondente;
-    - metadados necessários para recuperação.
+    O vetor representa semanticamente o conteúdo do Chunk
+    e será utilizado pelo mecanismo de busca vetorial.
     """
 
     id: str
 
-    document_name: str
+    chunk: Chunk
 
-    category: str
-
-    source_path: Path
-
-    chunk_index: int
-
-    content: str
-
-    embedding: list[float]
+    vector: list[float]

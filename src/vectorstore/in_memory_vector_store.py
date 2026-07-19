@@ -9,26 +9,32 @@ from src.vectorstore.vector_search_result import VectorSearchResult
 
 class InMemoryVectorStore(VectorStore):
     """
-    Implementação simples de um banco vetorial em memória.
+    Implementação de VectorStore baseada em memória.
 
-    Esta implementação possui dois objetivos principais:
+    Esta implementação será utilizada inicialmente para validar
+    o pipeline de RAG sem introduzir imediatamente uma dependência
+    de infraestrutura como FAISS ou ChromaDB.
 
-    1. Validar toda a arquitetura antes da integração com
-       FAISS ou outro banco vetorial.
+    Os documentos são mantidos em memória e a busca utiliza
+    similaridade de cosseno.
 
-    2. Permitir testes unitários sem dependência de
-       bibliotecas externas.
+    Esta implementação não possui persistência. Portanto,
+    todos os dados são perdidos quando a aplicação é encerrada.
 
-    Os documentos são armazenados em memória utilizando
-    um dicionário indexado pelo identificador.
+    Em uma etapa posterior, poderá ser substituída por uma
+    implementação baseada em FAISS ou outro mecanismo vetorial
+    sem alterar o contrato utilizado pelas camadas superiores.
     """
 
     def __init__(self) -> None:
         """
-        Inicializa o armazenamento interno.
+        Inicializa o armazenamento vetorial em memória.
         """
 
-        self._documents: dict[str, VectorDocument] = {}
+        self._documents: dict[
+            str,
+            VectorDocument,
+        ] = {}
 
     def add(
         self,
@@ -37,30 +43,37 @@ class InMemoryVectorStore(VectorStore):
         """
         Adiciona um documento ao armazenamento.
 
-        Caso o identificador já exista, o documento será
-        substituído.
+        Caso já exista um documento com o mesmo identificador,
+        o documento existente será substituído.
 
         Args:
             document:
-                Documento vetorial.
+                Documento vetorial que será armazenado.
         """
 
-        self._documents[document.id] = document
+        self._documents[
+            document.id
+        ] = document
 
     def add_many(
         self,
         documents: list[VectorDocument],
     ) -> None:
         """
-        Adiciona múltiplos documentos.
+        Adiciona múltiplos documentos ao armazenamento.
+
+        Caso algum documento possua um identificador já existente,
+        o documento anterior será substituído.
 
         Args:
             documents:
-                Lista de documentos vetoriais.
+                Documentos vetoriais que serão armazenados.
         """
 
         for document in documents:
-            self.add(document)
+            self.add(
+                document,
+            )
 
     def search(
         self,
@@ -68,32 +81,43 @@ class InMemoryVectorStore(VectorStore):
         limit: int = 5,
     ) -> list[VectorSearchResult]:
         """
-        Executa busca utilizando similaridade do cosseno.
+        Busca os documentos mais similares ao vetor informado.
+
+        A similaridade utilizada é a similaridade de cosseno.
 
         Args:
             query_vector:
-                Vetor representando a consulta.
+                Vetor utilizado como consulta.
 
             limit:
-                Quantidade máxima de resultados.
+                Quantidade máxima de resultados retornados.
 
         Returns:
-            Lista ordenada dos documentos mais similares.
+            Lista de resultados ordenados da maior para a menor
+            similaridade.
         """
 
-        results: list[VectorSearchResult] = []
+        if not query_vector:
+            return []
+
+        if limit <= 0:
+            return []
+
+        results: list[
+            VectorSearchResult
+        ] = []
 
         for document in self._documents.values():
 
-            similarity = self._cosine_similarity(
+            score = self._cosine_similarity(
                 query_vector,
-                document.embedding,
+                document.vector,
             )
 
             results.append(
                 VectorSearchResult(
                     document=document,
-                    score=similarity,
+                    score=score,
                 )
             )
 
@@ -102,18 +126,22 @@ class InMemoryVectorStore(VectorStore):
             reverse=True,
         )
 
-        return results[:limit]
+        return results[
+            :limit
+        ]
 
     def delete(
         self,
         document_id: str,
     ) -> None:
         """
-        Remove um documento.
+        Remove um documento do armazenamento.
+
+        Caso o documento não exista, nenhuma exceção será lançada.
 
         Args:
             document_id:
-                Identificador do documento.
+                Identificador do documento que será removido.
         """
 
         self._documents.pop(
@@ -121,19 +149,25 @@ class InMemoryVectorStore(VectorStore):
             None,
         )
 
-    def clear(self) -> None:
+    def clear(
+        self,
+    ) -> None:
         """
         Remove todos os documentos armazenados.
         """
 
         self._documents.clear()
 
-    def size(self) -> int:
+    def size(
+        self,
+    ) -> int:
         """
-        Retorna a quantidade de documentos armazenados.
+        Retorna a quantidade de documentos indexados.
         """
 
-        return len(self._documents)
+        return len(
+            self._documents,
+        )
 
     @staticmethod
     def _cosine_similarity(
@@ -141,9 +175,7 @@ class InMemoryVectorStore(VectorStore):
         vector_b: list[float],
     ) -> float:
         """
-        Calcula a similaridade do cosseno entre dois vetores.
-
-        Quanto mais próximo de 1, maior a similaridade.
+        Calcula a similaridade de cosseno entre dois vetores.
 
         Args:
             vector_a:
@@ -153,7 +185,11 @@ class InMemoryVectorStore(VectorStore):
                 Segundo vetor.
 
         Returns:
-            Valor da similaridade.
+            Valor de similaridade entre os vetores.
+
+        Raises:
+            ValueError:
+                Caso os vetores possuam dimensões diferentes.
         """
 
         if len(vector_a) != len(vector_b):
@@ -161,26 +197,38 @@ class InMemoryVectorStore(VectorStore):
                 "Os vetores devem possuir a mesma dimensão."
             )
 
-        produto_escalar = sum(
-            a * b
-            for a, b in zip(vector_a, vector_b)
-        )
-
-        norma_a = math.sqrt(
-            sum(
-                valor * valor
-                for valor in vector_a
+        dot_product = sum(
+            value_a * value_b
+            for value_a, value_b in zip(
+                vector_a,
+                vector_b,
             )
         )
 
-        norma_b = math.sqrt(
+        magnitude_a = math.sqrt(
             sum(
-                valor * valor
-                for valor in vector_b
+                value * value
+                for value in vector_a
             )
         )
 
-        if norma_a == 0 or norma_b == 0:
+        magnitude_b = math.sqrt(
+            sum(
+                value * value
+                for value in vector_b
+            )
+        )
+
+        if (
+            magnitude_a == 0
+            or magnitude_b == 0
+        ):
             return 0.0
 
-        return produto_escalar / (norma_a * norma_b)
+        return (
+            dot_product
+            / (
+                magnitude_a
+                * magnitude_b
+            )
+        )

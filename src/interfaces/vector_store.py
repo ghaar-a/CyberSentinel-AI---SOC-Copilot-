@@ -13,11 +13,10 @@ class VectorStore(ABC):
 
     Esta abstração desacopla a aplicação de implementações
     específicas como FAISS, ChromaDB, pgvector ou qualquer
-    outro banco vetorial.
+    outro mecanismo de armazenamento vetorial.
 
-    O restante da aplicação deve depender apenas desta
-    interface, respeitando o princípio da Inversão de
-    Dependência (Dependency Inversion Principle).
+    O restante da aplicação deve depender apenas deste contrato,
+    respeitando o princípio da Inversão de Dependência.
     """
 
     @abstractmethod
@@ -29,7 +28,7 @@ class VectorStore(ABC):
         Adiciona um documento vetorial ao índice.
 
         Caso já exista um documento com o mesmo identificador,
-        a implementação poderá atualizá-lo.
+        a implementação deverá substituir o documento existente.
 
         Args:
             document:
@@ -43,11 +42,11 @@ class VectorStore(ABC):
         documents: list[VectorDocument],
     ) -> None:
         """
-        Adiciona múltiplos documentos vetoriais.
+        Adiciona múltiplos documentos vetoriais ao índice.
 
         Args:
             documents:
-                Lista de documentos vetoriais.
+                Lista de documentos que serão indexados.
         """
         raise NotImplementedError
 
@@ -58,14 +57,14 @@ class VectorStore(ABC):
         limit: int = 5,
     ) -> list[VectorSearchResult]:
         """
-        Executa uma busca por similaridade.
+        Executa uma busca por similaridade vetorial.
 
         Args:
             query_vector:
-                Vetor da consulta.
+                Vetor correspondente à consulta.
 
             limit:
-                Quantidade máxima de resultados.
+                Quantidade máxima de resultados retornados.
 
         Returns:
             Lista contendo os documentos mais similares.
@@ -82,19 +81,23 @@ class VectorStore(ABC):
 
         Args:
             document_id:
-                Identificador do documento.
+                Identificador único do documento.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def clear(self) -> None:
+    def clear(
+        self,
+    ) -> None:
         """
         Remove todos os documentos armazenados.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def size(self) -> int:
+    def size(
+        self,
+    ) -> int:
         """
         Retorna a quantidade de documentos indexados.
         """

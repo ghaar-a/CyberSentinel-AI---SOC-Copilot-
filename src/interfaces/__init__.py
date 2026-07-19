@@ -1,9 +1,10 @@
 """
-Pacote que reúne todos os contratos (interfaces) da aplicação.
+Contratos e interfaces utilizados pelas diferentes
+camadas do CyberSentinel AI.
 
-As interfaces definem os pontos de extensão da arquitetura,
-permitindo que implementações concretas sejam substituídas
-sem impactar as demais camadas.
+As interfaces representam pontos de extensão da arquitetura
+e permitem manter as implementações concretas desacopladas
+das camadas superiores.
 """
 
 from .chunk_provider import ChunkProvider

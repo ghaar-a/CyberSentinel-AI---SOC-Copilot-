@@ -1,24 +1,20 @@
 """
-Pacote responsável pela camada de recuperação
-(Retrieval) do CyberSentinel AI.
+Componentes responsáveis pela recuperação de contexto.
 
-Esta camada abstrai completamente a estratégia
-utilizada para localizar informações relevantes.
-
-Atualmente a aplicação utiliza recuperação por
-palavras-chave, mas a arquitetura foi preparada
-para evolução para recuperação vetorial (RAG)
-sem alterações nas camadas superiores.
+Este pacote contém as abstrações e estratégias utilizadas
+para recuperar informações relevantes da base de conhecimento.
 """
 
 from .keyword_chunk_retriever import KeywordChunkRetriever
-from .retrieved_chunk import RetrievedChunk
 from .retrieval_strategy import RetrievalStrategy
+from .retrieved_chunk import RetrievedChunk
 from .retriever import Retriever
+from .vector_retriever import VectorRetriever
 
 __all__ = [
     "KeywordChunkRetriever",
-    "RetrievedChunk",
     "RetrievalStrategy",
+    "RetrievedChunk",
     "Retriever",
+    "VectorRetriever",
 ]
