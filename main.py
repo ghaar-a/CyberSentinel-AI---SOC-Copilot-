@@ -1,85 +1,42 @@
 from src.agent.cyber_sentinel_agent import CyberSentinelAgent
-
-from src.chunking import MarkdownChunker
-
+from src.chunking.markdown_chunker import MarkdownChunker
 from src.config.settings import (
+    CHROMA_DIR,
     PROMPTS_DIR,
+    settings,
 )
-
-from src.embedding import (
-    EmbeddingGenerator,
+from src.embedding.embedding_generator import EmbeddingGenerator
+from src.embedding.sentence_transformers_embedding_provider import (
     SentenceTransformersEmbeddingProvider,
 )
-
-from src.indexing.vector_indexer import VectorIndexer
-
-from src.knowledge.knowledge_loader import (
-    KnowledgeLoader,
-)
-
-from src.llm.gemini_client import (
-    GeminiClient,
-)
-
-from src.prompts.prompt_manager import (
-    PromptManager,
-)
-
-from src.retrieval import (
-    Retriever,
-    VectorRetriever,
-)
-
-from src.vectorstore import (
-    InMemoryVectorStore,
-)
-
+from src.knowledge.knowledge_loader import KnowledgeLoader
+from src.llm.gemini_client import GeminiClient
+from src.prompts.prompt_manager import PromptManager
+from src.retrieval.retriever import Retriever
+from src.retrieval.vector_retriever import VectorRetriever
 from src.utils.logger import logger
-
-
-EMBEDDING_MODEL = (
-    "sentence-transformers/all-MiniLM-L6-v2"
-)
+from src.vectorstore.chroma_vector_store import ChromaVectorStore
+from src.vectorstore.vector_document import VectorDocument
 
 
 def create_agent() -> CyberSentinelAgent:
     """
-    Inicializa todos os componentes necessários
-    para o CyberSentinel AI.
+    Inicializa todos os componentes necessários para o CyberSentinel AI.
 
-    O processo de inicialização realiza:
-
-    1. Carregamento da base de conhecimento.
-    2. Divisão dos documentos em chunks.
-    3. Geração dos embeddings dos chunks.
-    4. Indexação dos vetores.
-    5. Configuração do recuperador vetorial.
-    6. Configuração da Prompt Engine.
-    7. Configuração do cliente LLM.
-
-    Returns:
-        Agente CyberSentinel AI configurado.
+    O pipeline utiliza recuperação semântica persistente através
+    de Sentence Transformers e ChromaDB.
     """
 
     logger.info(
         "Inicializando base de conhecimento..."
     )
 
-    knowledge_loader = (
-        KnowledgeLoader()
-    )
+    knowledge_loader = KnowledgeLoader()
 
     knowledge_loader.load()
 
     logger.info(
-        "Base de conhecimento carregada: %d documentos.",
-        len(
-            knowledge_loader.documents
-        ),
-    )
-
-    logger.info(
-        "Gerando chunks da base de conhecimento..."
+        "Criando chunks da base de conhecimento..."
     )
 
     chunker = MarkdownChunker(
@@ -89,73 +46,65 @@ def create_agent() -> CyberSentinelAgent:
     chunks = chunker.get_chunks()
 
     logger.info(
-        "Chunks gerados: %d.",
+        "Chunks disponíveis: %d",
         len(chunks),
     )
 
-    logger.info(
-        "Inicializando modelo de embeddings: %s",
-        EMBEDDING_MODEL,
+    embedding_provider = SentenceTransformersEmbeddingProvider(
+        model_name=settings.embedding_model,
     )
 
-    embedding_provider = (
-        SentenceTransformersEmbeddingProvider(
-            model_name=EMBEDDING_MODEL,
-        )
-    )
-
-    embedding_generator = (
-        EmbeddingGenerator(
-            provider=embedding_provider,
-        )
-    )
-
-    vector_store = (
-        InMemoryVectorStore()
-    )
-
-    vector_indexer = (
-        VectorIndexer(
-            embedding_generator=embedding_generator,
-            vector_store=vector_store,
-        )
+    embedding_generator = EmbeddingGenerator(
+        provider=embedding_provider,
     )
 
     logger.info(
-        "Indexando chunks no armazenamento vetorial..."
+        "Gerando embeddings da base de conhecimento..."
     )
 
-    vector_indexer.index(
+    embeddings = embedding_generator.generate(
         chunks,
     )
 
+    vector_documents = [
+        VectorDocument(
+            id=embedding.chunk.id,
+            chunk=embedding.chunk,
+            vector=embedding.vector,
+        )
+        for embedding in embeddings
+    ]
+
+    vector_store = ChromaVectorStore(
+        persist_directory=str(
+            CHROMA_DIR,
+        ),
+        collection_name=settings.chroma_collection_name,
+    )
+
+    vector_store.add_many(
+        vector_documents,
+    )
+
     logger.info(
-        "Indexação vetorial concluída: %d documentos.",
-        vector_indexer.size(),
+        "Índice vetorial disponível com %d documentos.",
+        vector_store.size(),
     )
 
-    vector_retriever = (
-        VectorRetriever(
-            embedding_generator=embedding_generator,
-            vector_store=vector_store,
-        )
+    vector_retriever = VectorRetriever(
+        embedding_generator=embedding_generator,
+        vector_store=vector_store,
     )
 
-    retriever = (
-        Retriever(
-            strategy=vector_retriever,
-        )
+    retriever = Retriever(
+        strategy=vector_retriever,
     )
 
-    prompt_manager = (
-        PromptManager(
-            prompts_directory=PROMPTS_DIR,
-        )
+    prompt_manager = PromptManager(
+        prompts_directory=PROMPTS_DIR,
     )
 
-    gemini_client = (
-        GeminiClient()
-    )
+    gemini_client = GeminiClient()
 
     return CyberSentinelAgent(
         retriever=retriever,
@@ -185,15 +134,14 @@ def main() -> None:
             "\nCyberSentinel > "
         ).strip()
 
-        if question.lower() in [
+        if question.lower() in {
             "exit",
             "quit",
             "sair",
-        ]:
+        }:
             logger.info(
                 "Encerrando aplicação."
             )
-
             break
 
         if not question:
@@ -210,20 +158,18 @@ def main() -> None:
             )
 
             print(
-                response
+                response,
             )
 
-        except Exception as exc:
+        except Exception as exception:
 
             logger.exception(
-                "Erro ao processar pergunta: %s",
-                exc,
+                "Erro ao processar a pergunta: %s",
+                exception,
             )
 
             print(
-                "\nNão foi possível processar "
-                "a pergunta. Consulte os logs "
-                "para mais detalhes."
+                "\nNão foi possível processar sua solicitação."
             )
 
 

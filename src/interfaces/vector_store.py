@@ -8,14 +8,19 @@ from src.vectorstore.vector_search_result import VectorSearchResult
 
 class VectorStore(ABC):
     """
-    Contrato responsável pelo armazenamento e recuperação
-    de documentos vetoriais.
+    Contrato para armazenamento e recuperação de documentos vetoriais.
 
-    Esta abstração desacopla a aplicação de implementações
-    específicas como FAISS, ChromaDB, pgvector ou qualquer
-    outro mecanismo de armazenamento vetorial.
+    A interface desacopla a aplicação da tecnologia concreta utilizada
+    para indexação e busca vetorial.
 
-    O restante da aplicação deve depender apenas deste contrato,
+    Implementações possíveis incluem:
+
+    - Armazenamento em memória para testes.
+    - ChromaDB para armazenamento vetorial persistente.
+    - FAISS para busca vetorial de alto desempenho.
+    - pgvector para integração com PostgreSQL.
+
+    As camadas superiores da aplicação dependem somente deste contrato,
     respeitando o princípio da Inversão de Dependência.
     """
 
@@ -25,15 +30,13 @@ class VectorStore(ABC):
         document: VectorDocument,
     ) -> None:
         """
-        Adiciona um documento vetorial ao índice.
-
-        Caso já exista um documento com o mesmo identificador,
-        a implementação deverá substituir o documento existente.
+        Adiciona ou atualiza um documento vetorial.
 
         Args:
             document:
                 Documento vetorial que será indexado.
         """
+
         raise NotImplementedError
 
     @abstractmethod
@@ -42,12 +45,13 @@ class VectorStore(ABC):
         documents: list[VectorDocument],
     ) -> None:
         """
-        Adiciona múltiplos documentos vetoriais ao índice.
+        Adiciona ou atualiza múltiplos documentos vetoriais.
 
         Args:
             documents:
                 Lista de documentos que serão indexados.
         """
+
         raise NotImplementedError
 
     @abstractmethod
@@ -64,11 +68,12 @@ class VectorStore(ABC):
                 Vetor correspondente à consulta.
 
             limit:
-                Quantidade máxima de resultados retornados.
+                Quantidade máxima de resultados.
 
         Returns:
-            Lista contendo os documentos mais similares.
+            Lista de resultados ordenados por relevância.
         """
+
         raise NotImplementedError
 
     @abstractmethod
@@ -77,12 +82,13 @@ class VectorStore(ABC):
         document_id: str,
     ) -> None:
         """
-        Remove um documento do índice.
+        Remove um documento vetorial.
 
         Args:
             document_id:
                 Identificador único do documento.
         """
+
         raise NotImplementedError
 
     @abstractmethod
@@ -92,6 +98,7 @@ class VectorStore(ABC):
         """
         Remove todos os documentos armazenados.
         """
+
         raise NotImplementedError
 
     @abstractmethod
@@ -101,4 +108,5 @@ class VectorStore(ABC):
         """
         Retorna a quantidade de documentos indexados.
         """
+
         raise NotImplementedError

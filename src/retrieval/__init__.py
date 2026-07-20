@@ -1,10 +1,3 @@
-"""
-Componentes responsáveis pela recuperação de contexto.
-
-Este pacote contém as abstrações e estratégias utilizadas
-para recuperar informações relevantes da base de conhecimento.
-"""
-
 from .keyword_chunk_retriever import KeywordChunkRetriever
 from .retrieval_strategy import RetrievalStrategy
 from .retrieved_chunk import RetrievedChunk

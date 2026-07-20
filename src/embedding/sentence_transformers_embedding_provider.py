@@ -5,57 +5,99 @@ from sentence_transformers import SentenceTransformer
 from src.chunking.chunk import Chunk
 from src.embedding.embedding import Embedding
 from src.interfaces.embedding_provider import EmbeddingProvider
+from src.utils.logger import logger
 
 
-class SentenceTransformersEmbeddingProvider(
-    EmbeddingProvider,
-):
+class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
     """
-    Implementação de EmbeddingProvider utilizando
-    modelos da biblioteca Sentence Transformers.
+    Implementação de EmbeddingProvider utilizando Sentence Transformers.
 
-    O modelo é executado localmente, permitindo gerar
-    embeddings sem depender de uma API externa.
+    Esta classe transforma o conteúdo textual dos chunks em vetores
+    semânticos utilizando um modelo local de embeddings.
 
-    A mesma implementação é utilizada tanto para indexar
-    os chunks da base de conhecimento quanto para transformar
-    consultas do usuário em vetores.
+    A implementação permanece desacoplada do restante da aplicação
+    através do contrato EmbeddingProvider.
+
+    Dessa forma, a aplicação pode futuramente substituir Sentence
+    Transformers por outro provedor sem modificar o EmbeddingGenerator,
+    o Retriever ou o agente principal.
+
+    O modelo padrão utilizado é o all-MiniLM-L6-v2, que gera vetores
+    de 384 dimensões e apresenta bom equilíbrio entre qualidade,
+    velocidade e consumo de recursos para execução em CPU.
     """
 
     def __init__(
         self,
-        model_name: str,
+        model_name: str = "all-MiniLM-L6-v2",
     ) -> None:
         """
         Inicializa o provedor de embeddings.
 
+        O modelo é carregado uma única vez durante a criação do provider
+        e permanece em memória para reutilização nas próximas chamadas.
+
         Args:
             model_name:
-                Nome do modelo Sentence Transformers utilizado
-                para gerar os embeddings.
+                Nome do modelo Sentence Transformers utilizado para
+                gerar os embeddings.
         """
+
+        logger.info(
+            "Carregando modelo de embeddings: %s",
+            model_name,
+        )
 
         self._model = SentenceTransformer(
             model_name,
         )
+
+        self._model_name = model_name
+
+        logger.info(
+            "Modelo de embeddings carregado com sucesso: %s",
+            model_name,
+        )
+
+    @property
+    def model_name(self) -> str:
+        """
+        Retorna o nome do modelo utilizado pelo provider.
+        """
+
+        return self._model_name
 
     def generate(
         self,
         chunks: list[Chunk],
     ) -> list[Embedding]:
         """
-        Gera embeddings para os chunks informados.
+        Gera embeddings para uma coleção de chunks.
+
+        Cada chunk é convertido em um vetor numérico que representa
+        semanticamente o seu conteúdo.
 
         Args:
             chunks:
-                Chunks que serão transformados em vetores.
+                Lista de chunks que serão transformados em embeddings.
 
         Returns:
-            Lista de embeddings associados aos seus chunks.
+            Lista de objetos Embedding associados aos respectivos chunks.
+
+        Raises:
+            ValueError:
+                Caso a lista de chunks esteja vazia.
         """
 
         if not chunks:
-            return []
+            raise ValueError(
+                "Não é possível gerar embeddings para uma lista vazia de chunks."
+            )
+
+        logger.info(
+            "Gerando embeddings para %d chunks...",
+            len(chunks),
+        )
 
         texts = [
             chunk.content
@@ -66,9 +108,10 @@ class SentenceTransformersEmbeddingProvider(
             texts,
             convert_to_numpy=True,
             normalize_embeddings=True,
+            show_progress_bar=False,
         )
 
-        return [
+        embeddings = [
             Embedding(
                 chunk=chunk,
                 vector=vector.tolist(),
@@ -76,34 +119,13 @@ class SentenceTransformersEmbeddingProvider(
             for chunk, vector in zip(
                 chunks,
                 vectors,
+                strict=True,
             )
         ]
 
-    def generate_query_embedding(
-        self,
-        query: str,
-    ) -> list[float]:
-        """
-        Gera um embedding para uma consulta textual.
-
-        A consulta utiliza o mesmo modelo e as mesmas regras
-        de normalização aplicadas aos embeddings dos documentos.
-
-        Args:
-            query:
-                Consulta textual realizada pelo usuário.
-
-        Returns:
-            Vetor normalizado correspondente à consulta.
-        """
-
-        if not query.strip():
-            return []
-
-        vector = self._model.encode(
-            query.strip(),
-            convert_to_numpy=True,
-            normalize_embeddings=True,
+        logger.info(
+            "Embeddings gerados com sucesso: %d",
+            len(embeddings),
         )
 
-        return vector.tolist()
+        return embeddings

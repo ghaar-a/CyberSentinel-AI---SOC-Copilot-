@@ -12,6 +12,10 @@ class EmbeddingGenerator:
     Esta classe coordena a utilização de um EmbeddingProvider,
     mantendo a aplicação desacoplada da tecnologia utilizada
     para geração dos vetores.
+
+    A fachada permite que o restante da aplicação trabalhe com
+    uma única entrada para geração de embeddings, independentemente
+    do provedor concreto utilizado.
     """
 
     def __init__(
@@ -23,8 +27,7 @@ class EmbeddingGenerator:
 
         Args:
             provider:
-                Implementação responsável pela geração
-                dos embeddings.
+                Implementação responsável pela geração dos embeddings.
         """
 
         self._provider = provider
@@ -46,23 +49,4 @@ class EmbeddingGenerator:
 
         return self._provider.generate(
             chunks,
-        )
-
-    def generate_query_embedding(
-        self,
-        query: str,
-    ) -> list[float]:
-        """
-        Gera um embedding para uma consulta textual.
-
-        Args:
-            query:
-                Consulta realizada pelo usuário.
-
-        Returns:
-            Vetor correspondente à consulta.
-        """
-
-        return self._provider.generate_query_embedding(
-            query,
         )

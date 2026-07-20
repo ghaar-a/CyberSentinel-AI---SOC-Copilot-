@@ -1,12 +1,3 @@
-"""
-Contratos e interfaces utilizados pelas diferentes
-camadas do CyberSentinel AI.
-
-As interfaces representam pontos de extensão da arquitetura
-e permitem manter as implementações concretas desacopladas
-das camadas superiores.
-"""
-
 from .chunk_provider import ChunkProvider
 from .document_repository import DocumentRepository
 from .embedding_provider import EmbeddingProvider
