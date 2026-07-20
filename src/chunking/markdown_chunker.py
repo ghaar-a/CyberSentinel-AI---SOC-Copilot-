@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from uuid import uuid4
+import hashlib
 
 from src.chunking.chunk import Chunk
 from src.chunking.chunker import Chunker
@@ -15,67 +15,143 @@ class MarkdownChunker(
     """
     Divide documentos Markdown em chunks.
 
-    Nesta primeira versão cada seção
-    iniciada por '#' gera um chunk.
+    Cada seção iniciada por um título Markdown é tratada
+    como um chunk independente.
 
-    No futuro evoluiremos para um
-    Recursive Text Splitter.
+    O identificador do chunk é determinístico. Isso permite
+    que o mesmo conteúdo gere sempre o mesmo ID, evitando
+    duplicações durante processos de reindexação.
+
+    Esta implementação mantém a arquitetura preparada para
+    futuras estratégias de divisão de texto, como Recursive
+    Character Text Splitter.
     """
 
     def __init__(
         self,
         repository: DocumentRepository,
     ) -> None:
+        """
+        Inicializa o chunker.
 
-        self.repository = repository
+        Args:
+            repository:
+                Repositório responsável por fornecer os documentos
+                da base de conhecimento.
+        """
 
+        self._repository = repository
         self._chunks: list[Chunk] = []
 
     def chunk(self) -> list[Chunk]:
+        """
+        Divide todos os documentos disponíveis em chunks.
+
+        O processo é determinístico. Um mesmo documento,
+        com o mesmo conteúdo e na mesma posição, produzirá
+        sempre o mesmo identificador.
+
+        Returns:
+            Lista completa de chunks gerados.
+        """
 
         self._chunks.clear()
 
-        for document in self.repository.get_all():
-
-            sections = []
-
-            current = []
+        for document in self._repository.get_all():
+            sections: list[str] = []
+            current_section: list[str] = []
 
             for line in document.content.splitlines():
 
-                if line.startswith("#") and current:
-
+                if line.startswith("#") and current_section:
                     sections.append(
-                        "\n".join(current)
+                        "\n".join(current_section)
                     )
 
-                    current = []
+                    current_section = []
 
-                current.append(line)
+                current_section.append(line)
 
-            if current:
+            if current_section:
                 sections.append(
-                    "\n".join(current)
+                    "\n".join(current_section)
                 )
 
             for index, section in enumerate(sections):
 
+                content = section.strip()
+
+                if not content:
+                    continue
+
+                chunk_id = self._generate_chunk_id(
+                    document_path=str(document.path),
+                    index=index,
+                    content=content,
+                )
+
                 self._chunks.append(
                     Chunk(
-                        id=str(uuid4()),
+                        id=chunk_id,
                         document_name=document.name,
                         category=document.category,
                         source_path=document.path,
                         index=index,
-                        content=section.strip(),
+                        content=content,
                     )
                 )
 
-        return self._chunks
+        return list(self._chunks)
 
     def get_chunks(self) -> list[Chunk]:
+        """
+        Retorna os chunks atualmente disponíveis.
+
+        Caso os chunks ainda não tenham sido gerados,
+        executa automaticamente o processo de chunking.
+
+        Returns:
+            Lista de chunks disponíveis.
+        """
 
         if not self._chunks:
             self.chunk()
 
         return list(self._chunks)
+
+    @staticmethod
+    def _generate_chunk_id(
+        document_path: str,
+        index: int,
+        content: str,
+    ) -> str:
+        """
+        Gera um identificador determinístico para um chunk.
+
+        O ID é baseado no caminho do documento, posição do chunk
+        e conteúdo. Dessa forma, o mesmo conteúdo produz sempre
+        o mesmo identificador.
+
+        Args:
+            document_path:
+                Caminho do documento original.
+
+            index:
+                Índice do chunk dentro do documento.
+
+            content:
+                Conteúdo textual do chunk.
+
+        Returns:
+            Identificador hexadecimal baseado em SHA-256.
+        """
+
+        raw_identifier = (
+            f"{document_path}|"
+            f"{index}|"
+            f"{content}"
+        )
+
+        return hashlib.sha256(
+            raw_identifier.encode("utf-8")
+        ).hexdigest()

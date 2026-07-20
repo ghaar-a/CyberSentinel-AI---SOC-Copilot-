@@ -10,21 +10,14 @@ from src.utils.logger import logger
 
 class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
     """
-    Implementação de EmbeddingProvider utilizando Sentence Transformers.
+    Implementação de EmbeddingProvider utilizando
+    Sentence Transformers.
 
-    Esta classe transforma o conteúdo textual dos chunks em vetores
-    semânticos utilizando um modelo local de embeddings.
+    O modelo é carregado uma única vez durante a criação
+    do provider e reutilizado nas chamadas seguintes.
 
-    A implementação permanece desacoplada do restante da aplicação
-    através do contrato EmbeddingProvider.
-
-    Dessa forma, a aplicação pode futuramente substituir Sentence
-    Transformers por outro provedor sem modificar o EmbeddingGenerator,
-    o Retriever ou o agente principal.
-
-    O modelo padrão utilizado é o all-MiniLM-L6-v2, que gera vetores
-    de 384 dimensões e apresenta bom equilíbrio entre qualidade,
-    velocidade e consumo de recursos para execução em CPU.
+    Isso evita o custo de carregar novamente os pesos do modelo
+    a cada geração de embedding.
     """
 
     def __init__(
@@ -34,14 +27,12 @@ class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
         """
         Inicializa o provedor de embeddings.
 
-        O modelo é carregado uma única vez durante a criação do provider
-        e permanece em memória para reutilização nas próximas chamadas.
-
         Args:
             model_name:
-                Nome do modelo Sentence Transformers utilizado para
-                gerar os embeddings.
+                Nome do modelo Sentence Transformers utilizado.
         """
+
+        self._model_name = model_name
 
         logger.info(
             "Carregando modelo de embeddings: %s",
@@ -52,52 +43,27 @@ class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
             model_name,
         )
 
-        self._model_name = model_name
-
         logger.info(
-            "Modelo de embeddings carregado com sucesso: %s",
-            model_name,
+            "Modelo de embeddings carregado com sucesso.",
         )
-
-    @property
-    def model_name(self) -> str:
-        """
-        Retorna o nome do modelo utilizado pelo provider.
-        """
-
-        return self._model_name
 
     def generate(
         self,
         chunks: list[Chunk],
     ) -> list[Embedding]:
         """
-        Gera embeddings para uma coleção de chunks.
-
-        Cada chunk é convertido em um vetor numérico que representa
-        semanticamente o seu conteúdo.
+        Gera embeddings para os chunks informados.
 
         Args:
             chunks:
-                Lista de chunks que serão transformados em embeddings.
+                Chunks que serão convertidos em vetores.
 
         Returns:
-            Lista de objetos Embedding associados aos respectivos chunks.
-
-        Raises:
-            ValueError:
-                Caso a lista de chunks esteja vazia.
+            Lista de embeddings associados aos chunks.
         """
 
         if not chunks:
-            raise ValueError(
-                "Não é possível gerar embeddings para uma lista vazia de chunks."
-            )
-
-        logger.info(
-            "Gerando embeddings para %d chunks...",
-            len(chunks),
-        )
+            return []
 
         texts = [
             chunk.content
@@ -108,10 +74,9 @@ class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
             texts,
             convert_to_numpy=True,
             normalize_embeddings=True,
-            show_progress_bar=False,
         )
 
-        embeddings = [
+        return [
             Embedding(
                 chunk=chunk,
                 vector=vector.tolist(),
@@ -119,13 +84,5 @@ class SentenceTransformersEmbeddingProvider(EmbeddingProvider):
             for chunk, vector in zip(
                 chunks,
                 vectors,
-                strict=True,
             )
         ]
-
-        logger.info(
-            "Embeddings gerados com sucesso: %d",
-            len(embeddings),
-        )
-
-        return embeddings
