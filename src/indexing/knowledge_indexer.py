@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from src.chunking.chunk import Chunk
 from src.embedding.embedding_generator import EmbeddingGenerator
 from src.interfaces.vector_store import VectorStore
-from src.vectorstore.vector_document import VectorDocument
 from src.utils.logger import logger
+from src.vectorstore.vector_document import VectorDocument
 
 
 class KnowledgeIndexer:
@@ -14,18 +15,23 @@ class KnowledgeIndexer:
     O processo executado é:
 
     Chunks
-       ↓
+        ↓
     EmbeddingGenerator
-       ↓
+        ↓
     Embeddings
-       ↓
+        ↓
     VectorDocument
-       ↓
+        ↓
     VectorStore
 
     Esta classe centraliza a responsabilidade de indexação,
     evitando que o código de inicialização da aplicação
     precise conhecer os detalhes desse processo.
+
+    O indexador depende apenas das abstrações necessárias
+    para geração de embeddings e armazenamento vetorial.
+    Dessa forma, não possui conhecimento sobre a implementação
+    concreta do VectorStore.
     """
 
     def __init__(
@@ -49,18 +55,19 @@ class KnowledgeIndexer:
 
     def index(
         self,
-        chunks,
+        chunks: list[Chunk],
     ) -> None:
         """
         Gera embeddings e indexa os chunks no VectorStore.
 
-        O índice existente é limpo antes da indexação para garantir
-        que uma reconstrução da Base de Conhecimento não gere
-        documentos duplicados.
+        O índice existente é limpo somente após a geração dos embeddings
+        e a construção dos documentos vetoriais. Essa ordem evita que
+        uma falha durante o processamento dos embeddings apague
+        prematuramente um índice válido.
 
         Args:
             chunks:
-                Chunks provenientes da Base de Conhecimento.
+                Lista de chunks provenientes da Base de Conhecimento.
         """
 
         if not chunks:
@@ -74,8 +81,6 @@ class KnowledgeIndexer:
             len(chunks),
         )
 
-        self._vector_store.clear()
-
         embeddings = self._embedding_generator.generate(
             chunks,
         )
@@ -88,6 +93,14 @@ class KnowledgeIndexer:
             )
             for embedding in embeddings
         ]
+
+        if not vector_documents:
+            logger.warning(
+                "Nenhum documento vetorial foi gerado para indexação.",
+            )
+            return
+
+        self._vector_store.clear()
 
         self._vector_store.add_many(
             vector_documents,
