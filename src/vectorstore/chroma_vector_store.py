@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import chromadb
 
+from src.chunking.chunk import Chunk
 from src.interfaces.vector_store import VectorStore
 from src.utils.logger import logger
 from src.vectorstore.vector_document import VectorDocument
@@ -18,24 +20,29 @@ class ChromaVectorStore(VectorStore):
     e recuperação vetorial.
 
     Esta classe implementa o contrato VectorStore e, portanto, as camadas
-    superiores da aplicação não possuem conhecimento sobre ChromaDB.
+    superiores da aplicação não possuem conhecimento sobre a implementação
+    concreta utilizada para persistência e busca vetorial.
 
-    O armazenamento mantém:
+    Cada documento armazenado contém:
 
-    - embedding do documento;
     - identificador único;
-    - conteúdo original;
-    - metadados necessários para reconstrução do contexto.
+    - embedding;
+    - conteúdo textual original;
+    - metadados necessários para reconstrução do Chunk.
 
-    A persistência é realizada pelo próprio ChromaDB através do diretório
-    configurado no cliente persistente.
+    A coleção utiliza distância cosseno para calcular a proximidade
+    entre os embeddings.
 
-    A implementação utiliza distância cosseno para a busca vetorial.
-    Como os embeddings são normalizados pelo provider, a distância cosseno
-    pode ser convertida em uma pontuação de similaridade através de:
+    A distância retornada pelo ChromaDB é convertida para uma pontuação
+    de similaridade através da fórmula:
 
         similarity = 1 - distance
+
+    Quanto maior o valor da similaridade, maior a proximidade semântica
+    entre os vetores.
     """
+
+    _DISTANCE_SPACE = "cosine"
 
     def __init__(
         self,
@@ -43,14 +50,14 @@ class ChromaVectorStore(VectorStore):
         collection_name: str = "cybersentinel_knowledge",
     ) -> None:
         """
-        Inicializa o armazenamento vetorial ChromaDB.
+        Inicializa o armazenamento vetorial persistente.
 
         Args:
             persist_directory:
-                Diretório utilizado pelo ChromaDB para persistir os dados.
+                Diretório utilizado pelo ChromaDB para persistência dos dados.
 
             collection_name:
-                Nome da coleção responsável por armazenar os embeddings.
+                Nome da collection utilizada para armazenar os embeddings.
         """
 
         logger.info(
@@ -66,7 +73,7 @@ class ChromaVectorStore(VectorStore):
             name=collection_name,
             configuration={
                 "hnsw": {
-                    "space": "cosine",
+                    "space": self._DISTANCE_SPACE,
                 },
             },
         )
@@ -84,7 +91,7 @@ class ChromaVectorStore(VectorStore):
         Adiciona ou atualiza um documento vetorial.
 
         O identificador do VectorDocument é utilizado como identificador
-        único dentro da coleção ChromaDB.
+        único dentro da collection do ChromaDB.
 
         Args:
             document:
@@ -108,6 +115,11 @@ class ChromaVectorStore(VectorStore):
             ],
         )
 
+        logger.debug(
+            "Documento vetorial persistido: %s",
+            document.id,
+        )
+
     def add_many(
         self,
         documents: list[VectorDocument],
@@ -121,6 +133,9 @@ class ChromaVectorStore(VectorStore):
         """
 
         if not documents:
+            logger.warning(
+                "Nenhum documento vetorial recebido para persistência.",
+            )
             return
 
         self._collection.upsert(
@@ -157,9 +172,9 @@ class ChromaVectorStore(VectorStore):
         """
         Executa uma busca por similaridade vetorial.
 
-        O ChromaDB retorna os documentos ordenados por distância.
-        Como a coleção utiliza distância cosseno, a distância é convertida
-        para uma pontuação de similaridade.
+        O ChromaDB retorna os resultados ordenados por distância.
+        Como a collection utiliza distância cosseno, a distância é
+        convertida para uma pontuação de similaridade.
 
         Args:
             query_vector:
@@ -170,19 +185,28 @@ class ChromaVectorStore(VectorStore):
 
         Returns:
             Lista de resultados ordenados pela maior similaridade.
+
+        Raises:
+            ValueError:
+                Caso o vetor da consulta esteja vazio.
+
+            ValueError:
+                Caso o limite seja menor ou igual a zero.
         """
 
         if not query_vector:
             raise ValueError(
-                "O vetor da consulta não pode estar vazio."
+                "O vetor da consulta não pode estar vazio.",
             )
 
         if limit <= 0:
             raise ValueError(
-                "O limite da busca deve ser maior que zero."
+                "O limite da busca deve ser maior que zero.",
             )
 
-        if self.size() == 0:
+        collection_size = self.size()
+
+        if collection_size == 0:
             return []
 
         results = self._collection.query(
@@ -191,7 +215,7 @@ class ChromaVectorStore(VectorStore):
             ],
             n_results=min(
                 limit,
-                self.size(),
+                collection_size,
             ),
             include=[
                 "embeddings",
@@ -244,6 +268,20 @@ class ChromaVectorStore(VectorStore):
             distances,
             strict=True,
         ):
+            if content is None:
+                logger.warning(
+                    "Documento sem conteúdo retornado pelo ChromaDB: %s",
+                    document_id,
+                )
+                continue
+
+            if metadata is None:
+                logger.warning(
+                    "Documento sem metadados retornado pelo ChromaDB: %s",
+                    document_id,
+                )
+                continue
+
             chunk = self._build_chunk(
                 document_id=document_id,
                 content=content,
@@ -276,9 +314,11 @@ class ChromaVectorStore(VectorStore):
         """
         Remove um documento vetorial do ChromaDB.
 
+        Caso o identificador não exista, nenhuma exceção é lançada.
+
         Args:
             document_id:
-                Identificador do documento.
+                Identificador do documento que será removido.
         """
 
         self._collection.delete(
@@ -287,17 +327,30 @@ class ChromaVectorStore(VectorStore):
             ],
         )
 
+        logger.debug(
+            "Documento vetorial removido: %s",
+            document_id,
+        )
+
     def clear(
         self,
     ) -> None:
         """
-        Remove todos os documentos da coleção atual.
+        Remove todos os documentos da collection atual.
 
-        A coleção é removida e recriada para garantir que o índice
-        seja completamente limpo.
+        A collection é removida e recriada para garantir que o índice
+        vetorial seja completamente reconstruído.
+
+        A configuração de distância utilizada pela collection original
+        é preservada na nova collection.
         """
 
         collection_name = self._collection.name
+
+        logger.info(
+            "Limpando coleção ChromaDB: %s",
+            collection_name,
+        )
 
         self._client.delete_collection(
             name=collection_name,
@@ -307,9 +360,14 @@ class ChromaVectorStore(VectorStore):
             name=collection_name,
             configuration={
                 "hnsw": {
-                    "space": "cosine",
+                    "space": self._DISTANCE_SPACE,
                 },
             },
+        )
+
+        logger.info(
+            "Coleção ChromaDB recriada: %s",
+            collection_name,
         )
 
     def size(
@@ -317,6 +375,9 @@ class ChromaVectorStore(VectorStore):
     ) -> int:
         """
         Retorna a quantidade de documentos indexados.
+
+        Returns:
+            Quantidade de documentos armazenados na collection.
         """
 
         return self._collection.count()
@@ -333,7 +394,8 @@ class ChromaVectorStore(VectorStore):
                 Documento vetorial que será convertido em metadados.
 
         Returns:
-            Dicionário contendo os metadados do chunk.
+            Dicionário contendo os metadados necessários para reconstrução
+            do Chunk.
         """
 
         return {
@@ -350,7 +412,7 @@ class ChromaVectorStore(VectorStore):
         document_id: str,
         content: str,
         metadata: dict[str, Any],
-    ):
+    ) -> Chunk:
         """
         Reconstrói um Chunk a partir dos dados persistidos no ChromaDB.
 
@@ -368,10 +430,6 @@ class ChromaVectorStore(VectorStore):
             Instância reconstruída de Chunk.
         """
 
-        from pathlib import Path
-
-        from src.chunking.chunk import Chunk
-
         return Chunk(
             id=document_id,
             document_name=str(
@@ -383,7 +441,7 @@ class ChromaVectorStore(VectorStore):
             source_path=Path(
                 str(
                     metadata["source_path"],
-                )
+                ),
             ),
             index=int(
                 metadata["chunk_index"],
