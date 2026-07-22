@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import chromadb
 
@@ -12,6 +12,20 @@ from src.vectorstore.vector_document import VectorDocument
 from src.vectorstore.vector_search_result import VectorSearchResult
 
 
+class ChunkMetadata(TypedDict):
+    """
+    Representa os metadados persistidos junto a um Chunk no ChromaDB.
+
+    Os metadados são utilizados para reconstruir a entidade Chunk
+    após uma busca vetorial.
+    """
+
+    document_name: str
+    category: str
+    source_path: str
+    chunk_index: int
+
+
 class ChromaVectorStore(VectorStore):
     """
     Implementação persistente de VectorStore utilizando ChromaDB.
@@ -20,29 +34,24 @@ class ChromaVectorStore(VectorStore):
     e recuperação vetorial.
 
     Esta classe implementa o contrato VectorStore e, portanto, as camadas
-    superiores da aplicação não possuem conhecimento sobre a implementação
-    concreta utilizada para persistência e busca vetorial.
+    superiores da aplicação não possuem conhecimento sobre ChromaDB.
 
-    Cada documento armazenado contém:
+    O armazenamento mantém:
 
+    - embedding do documento;
     - identificador único;
-    - embedding;
-    - conteúdo textual original;
-    - metadados necessários para reconstrução do Chunk.
+    - conteúdo original;
+    - metadados necessários para reconstrução do contexto.
 
-    A coleção utiliza distância cosseno para calcular a proximidade
-    entre os embeddings.
+    A persistência é realizada pelo próprio ChromaDB através do diretório
+    configurado no cliente persistente.
 
+    A implementação utiliza distância cosseno para a busca vetorial.
     A distância retornada pelo ChromaDB é convertida para uma pontuação
     de similaridade através da fórmula:
 
-        similarity = 1 - distance
-
-    Quanto maior o valor da similaridade, maior a proximidade semântica
-    entre os vetores.
+    similarity = 1 - distance
     """
-
-    _DISTANCE_SPACE = "cosine"
 
     def __init__(
         self,
@@ -50,14 +59,14 @@ class ChromaVectorStore(VectorStore):
         collection_name: str = "cybersentinel_knowledge",
     ) -> None:
         """
-        Inicializa o armazenamento vetorial persistente.
+        Inicializa o armazenamento vetorial ChromaDB.
 
         Args:
             persist_directory:
-                Diretório utilizado pelo ChromaDB para persistência dos dados.
+                Diretório utilizado pelo ChromaDB para persistir os dados.
 
             collection_name:
-                Nome da collection utilizada para armazenar os embeddings.
+                Nome da coleção responsável por armazenar os embeddings.
         """
 
         logger.info(
@@ -73,7 +82,7 @@ class ChromaVectorStore(VectorStore):
             name=collection_name,
             configuration={
                 "hnsw": {
-                    "space": self._DISTANCE_SPACE,
+                    "space": "cosine",
                 },
             },
         )
@@ -91,7 +100,7 @@ class ChromaVectorStore(VectorStore):
         Adiciona ou atualiza um documento vetorial.
 
         O identificador do VectorDocument é utilizado como identificador
-        único dentro da collection do ChromaDB.
+        único dentro da coleção ChromaDB.
 
         Args:
             document:
@@ -115,11 +124,6 @@ class ChromaVectorStore(VectorStore):
             ],
         )
 
-        logger.debug(
-            "Documento vetorial persistido: %s",
-            document.id,
-        )
-
     def add_many(
         self,
         documents: list[VectorDocument],
@@ -133,9 +137,6 @@ class ChromaVectorStore(VectorStore):
         """
 
         if not documents:
-            logger.warning(
-                "Nenhum documento vetorial recebido para persistência.",
-            )
             return
 
         self._collection.upsert(
@@ -172,9 +173,9 @@ class ChromaVectorStore(VectorStore):
         """
         Executa uma busca por similaridade vetorial.
 
-        O ChromaDB retorna os resultados ordenados por distância.
-        Como a collection utiliza distância cosseno, a distância é
-        convertida para uma pontuação de similaridade.
+        O ChromaDB retorna os documentos ordenados por distância.
+        Como a coleção utiliza distância cosseno, a distância é convertida
+        para uma pontuação de similaridade.
 
         Args:
             query_vector:
@@ -225,30 +226,147 @@ class ChromaVectorStore(VectorStore):
             ],
         )
 
-        ids = results.get(
-            "ids",
-            [[]],
-        )[0]
+        return self._build_search_results(
+            results,
+        )
 
-        embeddings = results.get(
-            "embeddings",
-            [[]],
-        )[0]
+    def delete(
+        self,
+        document_id: str,
+    ) -> None:
+        """
+        Remove um documento vetorial do ChromaDB.
 
-        documents = results.get(
-            "documents",
-            [[]],
-        )[0]
+        Args:
+            document_id:
+                Identificador do documento.
+        """
 
-        metadatas = results.get(
-            "metadatas",
-            [[]],
-        )[0]
+        self._collection.delete(
+            ids=[
+                document_id,
+            ],
+        )
 
-        distances = results.get(
-            "distances",
-            [[]],
-        )[0]
+    def clear(
+        self,
+    ) -> None:
+        """
+        Remove todos os documentos armazenados na coleção atual.
+
+        A coleção é removida e recriada para garantir que o índice
+        seja completamente limpo.
+        """
+
+        collection_name = self._collection.name
+
+        self._client.delete_collection(
+            name=collection_name,
+        )
+
+        self._collection = self._client.get_or_create_collection(
+            name=collection_name,
+            configuration={
+                "hnsw": {
+                    "space": "cosine",
+                },
+            },
+        )
+
+        logger.info(
+            "Coleção ChromaDB limpa: %s",
+            collection_name,
+        )
+
+    def size(
+        self,
+    ) -> int:
+        """
+        Retorna a quantidade de documentos indexados.
+
+        Returns:
+            Quantidade de documentos armazenados na coleção.
+        """
+
+        return self._collection.count()
+
+    @staticmethod
+    def _build_metadata(
+        document: VectorDocument,
+    ) -> ChunkMetadata:
+        """
+        Constrói os metadados persistidos junto ao embedding.
+
+        Args:
+            document:
+                Documento vetorial que será convertido em metadados.
+
+        Returns:
+            Metadados do chunk compatíveis com o armazenamento ChromaDB.
+        """
+
+        return {
+            "document_name": document.chunk.document_name,
+            "category": document.chunk.category,
+            "source_path": str(
+                document.chunk.source_path,
+            ),
+            "chunk_index": document.chunk.index,
+        }
+
+    @classmethod
+    def _build_search_results(
+        cls,
+        results: Any,
+    ) -> list[VectorSearchResult]:
+        """
+        Converte a resposta do ChromaDB em resultados da aplicação.
+
+        O retorno da API do ChromaDB possui tipos opcionais porque
+        determinados campos podem não estar presentes dependendo
+        dos parâmetros utilizados na consulta.
+
+        Este método valida os dados antes de utilizá-los, evitando
+        acessar valores potencialmente nulos e mantendo a aplicação
+        independente dos detalhes do formato interno da resposta.
+
+        Args:
+            results:
+                Resultado retornado pelo método query do ChromaDB.
+
+        Returns:
+            Lista de resultados vetoriais convertidos para o domínio
+            da aplicação.
+        """
+
+        ids = cls._extract_result_group(
+            results.get("ids"),
+        )
+
+        embeddings = cls._extract_result_group(
+            results.get("embeddings"),
+        )
+
+        documents = cls._extract_result_group(
+            results.get("documents"),
+        )
+
+        metadatas = cls._extract_result_group(
+            results.get("metadatas"),
+        )
+
+        distances = cls._extract_result_group(
+            results.get("distances"),
+        )
+
+        if not (
+            ids
+            and embeddings
+            and documents
+            and metadatas
+            and distances
+        ):
+            return []
 
         search_results: list[
             VectorSearchResult
@@ -268,33 +386,51 @@ class ChromaVectorStore(VectorStore):
             distances,
             strict=True,
         ):
-            if content is None:
+            if not isinstance(
+                document_id,
+                str,
+            ):
+                continue
+
+            if not isinstance(
+                content,
+                str,
+            ):
+                continue
+
+            if not isinstance(
+                distance,
+                (int, float),
+            ):
+                continue
+
+            chunk_metadata = cls._validate_metadata(
+                metadata,
+            )
+
+            if chunk_metadata is None:
                 logger.warning(
-                    "Documento sem conteúdo retornado pelo ChromaDB: %s",
+                    "Metadados inválidos encontrados para o documento: %s",
                     document_id,
                 )
                 continue
 
-            if metadata is None:
-                logger.warning(
-                    "Documento sem metadados retornado pelo ChromaDB: %s",
-                    document_id,
-                )
-                continue
-
-            chunk = self._build_chunk(
+            chunk = cls._build_chunk(
                 document_id=document_id,
                 content=content,
-                metadata=metadata,
+                metadata=chunk_metadata,
             )
 
             vector_document = VectorDocument(
                 id=document_id,
                 chunk=chunk,
-                vector=list(vector),
+                vector=[
+                    float(value)
+                    for value in vector
+                ],
             )
 
-            similarity = self._distance_to_similarity(
+            similarity = cls._distance_to_similarity(
                 distance,
             )
 
@@ -302,116 +438,131 @@ class ChromaVectorStore(VectorStore):
                 VectorSearchResult(
                     document=vector_document,
                     score=similarity,
-                )
+                ),
             )
 
         return search_results
 
-    def delete(
-        self,
-        document_id: str,
-    ) -> None:
+    @staticmethod
+    def _extract_result_group(
+        value: Any,
+    ) -> list[Any]:
         """
-        Remove um documento vetorial do ChromaDB.
+        Extrai o primeiro grupo de resultados retornado pelo ChromaDB.
 
-        Caso o identificador não exista, nenhuma exceção é lançada.
+        A API de consulta do ChromaDB retorna resultados agrupados por
+        consulta. Como o VectorStore executa uma única consulta por vez,
+        apenas o primeiro grupo é utilizado.
 
         Args:
-            document_id:
-                Identificador do documento que será removido.
-        """
-
-        self._collection.delete(
-            ids=[
-                document_id,
-            ],
-        )
-
-        logger.debug(
-            "Documento vetorial removido: %s",
-            document_id,
-        )
-
-    def clear(
-        self,
-    ) -> None:
-        """
-        Remove todos os documentos da collection atual.
-
-        A collection é removida e recriada para garantir que o índice
-        vetorial seja completamente reconstruído.
-
-        A configuração de distância utilizada pela collection original
-        é preservada na nova collection.
-        """
-
-        collection_name = self._collection.name
-
-        logger.info(
-            "Limpando coleção ChromaDB: %s",
-            collection_name,
-        )
-
-        self._client.delete_collection(
-            name=collection_name,
-        )
-
-        self._collection = self._client.get_or_create_collection(
-            name=collection_name,
-            configuration={
-                "hnsw": {
-                    "space": self._DISTANCE_SPACE,
-                },
-            },
-        )
-
-        logger.info(
-            "Coleção ChromaDB recriada: %s",
-            collection_name,
-        )
-
-    def size(
-        self,
-    ) -> int:
-        """
-        Retorna a quantidade de documentos indexados.
+            value:
+                Valor retornado pelo ChromaDB.
 
         Returns:
-            Quantidade de documentos armazenados na collection.
+            Lista contendo os resultados da primeira consulta.
+            Retorna uma lista vazia caso o valor seja inexistente
+            ou não possua o formato esperado.
         """
 
-        return self._collection.count()
+        if value is None:
+            return []
+
+        if not isinstance(
+            value,
+            list,
+        ):
+            return []
+
+        if not value:
+            return []
+
+        first_group = value[0]
+
+        if first_group is None:
+            return []
+
+        if not isinstance(
+            first_group,
+            list,
+        ):
+            return []
+
+        return first_group
 
     @staticmethod
-    def _build_metadata(
-        document: VectorDocument,
-    ) -> dict[str, Any]:
+    def _validate_metadata(
+        metadata: Any,
+    ) -> ChunkMetadata | None:
         """
-        Constrói os metadados persistidos junto ao embedding.
+        Valida e normaliza os metadados retornados pelo ChromaDB.
 
         Args:
-            document:
-                Documento vetorial que será convertido em metadados.
+            metadata:
+                Metadados retornados pela consulta ao ChromaDB.
 
         Returns:
-            Dicionário contendo os metadados necessários para reconstrução
-            do Chunk.
+            Metadados tipados caso sejam válidos.
+            None caso os metadados estejam incompletos ou inválidos.
         """
 
+        if not isinstance(
+            metadata,
+            dict,
+        ):
+            return None
+
+        document_name = metadata.get(
+            "document_name",
+        )
+
+        category = metadata.get(
+            "category",
+        )
+
+        source_path = metadata.get(
+            "source_path",
+        )
+
+        chunk_index = metadata.get(
+            "chunk_index",
+        )
+
+        if not isinstance(
+            document_name,
+            str,
+        ):
+            return None
+
+        if not isinstance(
+            category,
+            str,
+        ):
+            return None
+
+        if not isinstance(
+            source_path,
+            str,
+        ):
+            return None
+
+        if not isinstance(
+            chunk_index,
+            int,
+        ):
+            return None
+
         return {
-            "document_name": document.chunk.document_name,
-            "category": document.chunk.category,
-            "source_path": str(
-                document.chunk.source_path,
-            ),
-            "chunk_index": document.chunk.index,
+            "document_name": document_name,
+            "category": category,
+            "source_path": source_path,
+            "chunk_index": chunk_index,
         }
 
     @staticmethod
     def _build_chunk(
         document_id: str,
         content: str,
-        metadata: dict[str, Any],
+        metadata: ChunkMetadata,
     ) -> Chunk:
         """
         Reconstrói um Chunk a partir dos dados persistidos no ChromaDB.
@@ -432,20 +583,20 @@ class ChromaVectorStore(VectorStore):
 
         return Chunk(
             id=document_id,
-            document_name=str(
-                metadata["document_name"],
-            ),
-            category=str(
-                metadata["category"],
-            ),
+            document_name=metadata[
+                "document_name"
+            ],
+            category=metadata[
+                "category"
+            ],
             source_path=Path(
-                str(
-                    metadata["source_path"],
-                ),
+                metadata[
+                    "source_path"
+                ],
             ),
-            index=int(
-                metadata["chunk_index"],
-            ),
+            index=metadata[
+                "chunk_index"
+            ],
             content=content,
         )
 
