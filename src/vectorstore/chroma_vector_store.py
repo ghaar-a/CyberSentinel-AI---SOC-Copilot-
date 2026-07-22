@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import chromadb
+from chromadb.api.types import (
+    Metadata,
+    QueryResult,
+)
 
 from src.chunking.chunk import Chunk
 from src.interfaces.vector_store import VectorStore
@@ -14,10 +18,12 @@ from src.vectorstore.vector_search_result import VectorSearchResult
 
 class ChunkMetadata(TypedDict):
     """
-    Representa os metadados persistidos junto a um Chunk no ChromaDB.
+    Representa os metadados utilizados internamente pela aplicação
+    para reconstruir um Chunk.
 
-    Os metadados são utilizados para reconstruir a entidade Chunk
-    após uma busca vetorial.
+    Esta estrutura representa o contrato de dados da camada de domínio
+    e não deve ser confundida com o tipo Metadata utilizado diretamente
+    pela API do ChromaDB.
     """
 
     document_name: str
@@ -118,7 +124,7 @@ class ChromaVectorStore(VectorStore):
                 document.chunk.content,
             ],
             metadatas=[
-                self._build_metadata(
+                self._build_chroma_metadata(
                     document,
                 ),
             ],
@@ -153,7 +159,7 @@ class ChromaVectorStore(VectorStore):
                 for document in documents
             ],
             metadatas=[
-                self._build_metadata(
+                self._build_chroma_metadata(
                     document,
                 )
                 for document in documents
@@ -291,21 +297,25 @@ class ChromaVectorStore(VectorStore):
         return self._collection.count()
 
     @staticmethod
-    def _build_metadata(
+    def _build_chroma_metadata(
         document: VectorDocument,
-    ) -> ChunkMetadata:
+    ) -> Metadata:
         """
-        Constrói os metadados persistidos junto ao embedding.
+        Constrói os metadados no formato esperado pelo ChromaDB.
+
+        Este método atua como uma fronteira entre o modelo interno
+        de dados da aplicação e o tipo de metadados exigido pela
+        infraestrutura ChromaDB.
 
         Args:
             document:
                 Documento vetorial que será convertido em metadados.
 
         Returns:
-            Metadados do chunk compatíveis com o armazenamento ChromaDB.
+            Metadados compatíveis com a API do ChromaDB.
         """
 
-        return {
+        metadata: Metadata = {
             "document_name": document.chunk.document_name,
             "category": document.chunk.category,
             "source_path": str(
@@ -314,25 +324,23 @@ class ChromaVectorStore(VectorStore):
             "chunk_index": document.chunk.index,
         }
 
+        return metadata
+
     @classmethod
     def _build_search_results(
         cls,
-        results: Any,
+        results: QueryResult,
     ) -> list[VectorSearchResult]:
         """
         Converte a resposta do ChromaDB em resultados da aplicação.
 
-        O retorno da API do ChromaDB possui tipos opcionais porque
-        determinados campos podem não estar presentes dependendo
-        dos parâmetros utilizados na consulta.
-
-        Este método valida os dados antes de utilizá-los, evitando
-        acessar valores potencialmente nulos e mantendo a aplicação
-        independente dos detalhes do formato interno da resposta.
+        A resposta do ChromaDB possui resultados agrupados por consulta.
+        Como o VectorStore executa uma única consulta por vez, apenas
+        o primeiro grupo de cada campo é processado.
 
         Args:
             results:
-                Resultado retornado pelo método query do ChromaDB.
+                Resultado retornado pelo ChromaDB.
 
         Returns:
             Lista de resultados vetoriais convertidos para o domínio
@@ -461,7 +469,7 @@ class ChromaVectorStore(VectorStore):
         Returns:
             Lista contendo os resultados da primeira consulta.
             Retorna uma lista vazia caso o valor seja inexistente
-            ou não possua o formato esperado.
+            ou possua formato inesperado.
         """
 
         if value is None:
@@ -495,6 +503,10 @@ class ChromaVectorStore(VectorStore):
     ) -> ChunkMetadata | None:
         """
         Valida e normaliza os metadados retornados pelo ChromaDB.
+
+        Este método representa a fronteira de entrada dos dados externos
+        na aplicação. Somente após a validação os metadados são convertidos
+        para o formato interno ChunkMetadata.
 
         Args:
             metadata:
@@ -575,7 +587,7 @@ class ChromaVectorStore(VectorStore):
                 Conteúdo textual armazenado.
 
             metadata:
-                Metadados persistidos junto ao documento.
+                Metadados validados e normalizados.
 
         Returns:
             Instância reconstruída de Chunk.
